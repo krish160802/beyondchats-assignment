@@ -10,7 +10,7 @@ const groq = new Groq({
 const API_BASE = "http://localhost:3000/api/articles";
 const SERP_API_KEY = process.env.SERP_API_KEY;
 
-// helper function
+// helper functions
 
 async function fetchOriginalArticles() {
   const res = await axios.get(API_BASE);
@@ -46,19 +46,14 @@ async function googleSearch(query) {
 }
 
 async function scrapeExternalArticle(url) {
-  console.log(`🌐 Scraping external article: ${url}`);
-
   const res = await axios.get(url, {
     timeout: 15000,
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (compatible; BeyondChatsBot/1.0; +https://beyondchats.com)",
+      "User-Agent": "Mozilla/5.0 (BeyondChatsBot)",
     },
   });
 
   const $ = cheerio.load(res.data);
-
-  let content = "";
 
   const selectors = [
     "article",
@@ -67,6 +62,7 @@ async function scrapeExternalArticle(url) {
     "div[class*='article']",
   ];
 
+  let content = "";
   for (const selector of selectors) {
     const text = $(selector).text().trim();
     if (text.length > 500) {
@@ -75,74 +71,82 @@ async function scrapeExternalArticle(url) {
     }
   }
 
-  
-  if (!content) {
-    content = $("body").text().trim();
-  }
+  if (!content) content = $("body").text().trim();
 
-  content = content.replace(/\s+/g, " ").trim();
+  return content.replace(/\s+/g, " ").slice(0, 5000);
+}
 
-  return content.slice(0, 6000); // limit size for LLM
+async function rewriteWithGroq(original, ref1, ref2) {
+  console.log("Calling Groq LLM to rewrite article...");
+
+  const prompt = `
+    You are a professional content editor.
+
+    TASK:
+    Rewrite and improve the ORIGINAL ARTICLE using the REFERENCE ARTICLES only for structure, tone, and idea inspiration.
+
+    RULES:
+    - DO NOT copy sentences from reference articles.
+    - DO NOT plagiarize.
+    - Keep the original topic and intent.
+    - Improve clarity, depth, and formatting.
+    - Use clear headings and subheadings.
+    - Write in a professional blog style.
+
+    ORIGINAL ARTICLE:
+    ${original}
+
+    REFERENCE ARTICLE 1:
+    ${ref1}
+
+    REFERENCE ARTICLE 2:
+    ${ref2}
+
+    OUTPUT:
+    Return ONLY the improved article content.
+    `;
+
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.1-8b-instant",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.7,
+  });
+
+  return completion.choices[0].message.content;
 }
 
 // main 
 
 (async () => {
   try {
-    console.log("📥 Fetching original articles...");
+    console.log("Fetching original articles...");
     const articles = await fetchOriginalArticles();
 
-    if (articles.length === 0) {
-      console.log("⚠️ No original articles found");
-      return;
-    }
+    if (articles.length === 0) return;
+
 
     const article = articles[0];
-    console.log(`\n🔎 Google search for: "${article.title}"`);
+    console.log(`\n Processing: ${article.title}`);
 
     const searchResults = await googleSearch(article.title);
+    if (searchResults.length < 2) return;
 
-    if (searchResults.length < 2) {
-      console.log("❌ Not enough external articles found");
-      return;
-    }
+    const ref1 = await scrapeExternalArticle(searchResults[0].link);
+    const ref2 = await scrapeExternalArticle(searchResults[1].link);
 
-    const scrapedContents = [];
+    const rewritten = await rewriteWithGroq(
+      article.content,
+      ref1,
+      ref2
+    );
 
-    for (const result of searchResults) {
-      const text = await scrapeExternalArticle(result.link);
-      scrapedContents.push({
-        title: result.title,
-        url: result.link,
-        content: text,
-      });
-    }
-
-    console.log("\n✅ External articles scraped successfully:\n");
-    scrapedContents.forEach((a, i) => {
-      console.log(`${i + 1}. ${a.title}`);
-      console.log(`   Content length: ${a.content.length} chars\n`);
-    });
+    console.log("\n REWRITTEN ARTICLE PREVIEW:\n");
+    console.log(rewritten.slice(0, 1500), "\n...");
 
   } catch (err) {
-    console.error("❌ Error:", err.message);
+    console.error("Error:", err.message);
   }
 })();
 
-// (async () => {
-//   try {
-//     const testUrl =
-//       "https://export.ebay.com/in/resources/weblog/10-common-customer-service-problems-and-their-solutions/";
 
-//     console.log("🧪 Testing scrapeExternalArticle() manually...\n");
 
-//     const content = await scrapeExternalArticle(testUrl);
-
-//     console.log("✅ Scraping successful");
-//     console.log("Content length:", content.length);
-//     console.log("\n📄 Preview:\n");
-//     console.log(content.slice(0, 800)); // preview first 800 chars
-//   } catch (err) {
-//     console.error("❌ Error:", err.message);
-//   }
-// })();
