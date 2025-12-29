@@ -77,8 +77,6 @@ async function scrapeExternalArticle(url) {
 }
 
 async function rewriteWithGroq(original, ref1, ref2) {
-  console.log("Calling Groq LLM to rewrite article...");
-
   const prompt = `
     You are a professional content editor.
 
@@ -105,6 +103,7 @@ async function rewriteWithGroq(original, ref1, ref2) {
     OUTPUT:
     Return ONLY the improved article content.
     `;
+    
 
   const completion = await groq.chat.completions.create({
     model: "llama-3.1-8b-instant",
@@ -121,12 +120,10 @@ async function rewriteWithGroq(original, ref1, ref2) {
   try {
     console.log("Fetching original articles...");
     const articles = await fetchOriginalArticles();
-
-    if (articles.length === 0) return;
-
+    if (!articles.length) return;
 
     const article = articles[0];
-    console.log(`\n Processing: ${article.title}`);
+    console.log(`Processing: ${article.title}`);
 
     const searchResults = await googleSearch(article.title);
     if (searchResults.length < 2) return;
@@ -134,19 +131,42 @@ async function rewriteWithGroq(original, ref1, ref2) {
     const ref1 = await scrapeExternalArticle(searchResults[0].link);
     const ref2 = await scrapeExternalArticle(searchResults[1].link);
 
+    if (ref1.length < 1000 || ref2.length < 1000) {
+        throw new Error("Reference article too short — scraping failed");
+    }
+
     const rewritten = await rewriteWithGroq(
       article.content,
       ref1,
       ref2
     );
 
-    console.log("\n REWRITTEN ARTICLE PREVIEW:\n");
-    console.log(rewritten.slice(0, 1500), "\n...");
+    const finalContent = `
+${rewritten}
+
+---
+
+### References
+1. ${searchResults[0].link}
+2. ${searchResults[1].link}
+`;
+
+    console.log("Publishing updated article via API...");
+
+    const res = await axios.post(API_BASE, {
+      title: `Updated: ${article.title}`,
+      content: finalContent,
+      type: "updated",
+      parent_id: article.id,
+      reference_urls: [
+        searchResults[0].link,
+        searchResults[1].link,
+      ],
+    });
+
+    console.log("Updated article published with ID:", res.data.id);
 
   } catch (err) {
     console.error("Error:", err.message);
   }
 })();
-
-
-
