@@ -108,3 +108,28 @@ body {
 .card:not(.expanded) .refs {
   opacity: 0.85;
 }
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-state h2 {
+  font-size: 24px;
+  margin-bottom: 12px;
+}
+
+.empty-state p {
+  color: #555;
+  margin: 6px 0;
+}
+
+.empty-state .hint {
+  font-size: 13px;
+  color: #888;
+}
+
+.muted {
+  color: #777;
+  font-style: italic;
+}
