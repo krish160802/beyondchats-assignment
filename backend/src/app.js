@@ -1,3 +1,5 @@
+require("../db/setup");
+
 const express = require("express");
 const articlesRoutes = require("./routes/articles.routes");
 
