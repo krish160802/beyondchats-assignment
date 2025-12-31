@@ -142,14 +142,14 @@ async function rewriteWithGroq(original, ref1, ref2) {
     );
 
     const finalContent = `
-${rewritten}
+    ${rewritten}
 
----
+    ---
 
-### References
-1. ${searchResults[0].link}
-2. ${searchResults[1].link}
-`;
+    ### References
+    1. ${searchResults[0].link}
+    2. ${searchResults[1].link}
+    `;
 
     console.log("Publishing updated article via API...");
 

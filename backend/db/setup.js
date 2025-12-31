@@ -8,4 +8,4 @@ const initSQL = fs.readFileSync(path.join(__dirname, "init.sql"), "utf8");
 const db = new Database(dbPath);
 db.exec(initSQL);
 
-console.log("✅ Database initialized successfully");
+console.log("Database initialized successfully");
